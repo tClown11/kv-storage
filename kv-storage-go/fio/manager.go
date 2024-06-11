@@ -1,5 +1,7 @@
 package fio
 
+import "errors"
+
 // IOManager 磁盘 IO 管理接口，可以接入不同的 IO 类型
 //
 //	目前支持:
@@ -16,4 +18,16 @@ type IOManager interface {
 
 	// Close 关闭文件
 	Close() error
+}
+
+func NewIOManager(fileName string, ioType FileIOType) (IOManager, error) {
+	switch ioType {
+	case StandardFIO:
+		return NewFileIO(fileName)
+	// case MemoryMap:
+	// 	return NewMMapIOManager(fileName)
+	default:
+		return nil, errors.New("unsupport iotype")
+	}
+
 }

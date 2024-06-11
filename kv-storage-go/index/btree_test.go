@@ -13,24 +13,34 @@ func TestBTree_PUT(t *testing.T) {
 
 	tests := []struct {
 		testData *BItem
-		result   bool
+		result   *data.LogRecordPos
 	}{
 		{
 			testData: &BItem{pos: &data.LogRecordPos{Fid: 1, Offset: 100}},
-			result:   true,
+			result:   nil,
 		},
 		{
 			testData: &BItem{
 				key: []byte("a"),
 				pos: &data.LogRecordPos{Fid: 1, Offset: 2},
 			},
-			result: true,
+			result: nil,
+		},
+		{
+			testData: &BItem{
+				key: []byte("a"),
+				pos: &data.LogRecordPos{Fid: 11, Offset: 12},
+			},
+			result: &data.LogRecordPos{Fid: 1, Offset: 2},
 		},
 	}
 
 	for i := range tests {
 		res := testBTree.Put(tests[i].testData.key, tests[i].testData.pos)
-		if tests[i].result != res {
+		if res != nil &&
+			tests[i].result.Fid != res.Fid &&
+			tests[i].result.Offset != res.Offset &&
+			tests[i].result.Size != res.Size {
 			t.Errorf("put data(%+v) to BTree fail", tests[i].testData)
 		}
 	}
@@ -50,7 +60,7 @@ func TestBTree_GET(t *testing.T) {
 			testData: &BItem{
 				key: []byte("a"),
 			},
-			result: &data.LogRecordPos{Fid: 1, Offset: 2},
+			result: &data.LogRecordPos{Fid: 11, Offset: 12},
 		},
 	}
 
@@ -65,23 +75,25 @@ func TestBTree_GET(t *testing.T) {
 func TestBTree_DEL(t *testing.T) {
 	tests := []struct {
 		testData *BItem
-		result   bool
+		result   *data.LogRecordPos
+		output   bool
 	}{
 		{
 			testData: &BItem{key: []byte("1")},
-			result:   false,
+			output:   false,
 		},
 		{
 			testData: &BItem{
 				key: []byte("a"),
 			},
-			result: true,
+			result: &data.LogRecordPos{Fid: 1, Offset: 2},
+			output: true,
 		},
 	}
 
 	for i := range tests {
-		res := testBTree.Delete(tests[i].testData.key)
-		if tests[i].result != res {
+		res, output := testBTree.Delete(tests[i].testData.key)
+		if tests[i].result != res && tests[i].output != output {
 			t.Errorf("delete data(%+v) from BTree fail", tests[i].testData)
 		}
 	}

@@ -2,6 +2,18 @@ package fio
 
 import "os"
 
+const DataFilePerm = 0644
+
+type FileIOType = byte
+
+const (
+	// StandardFIO 标准文件 IO
+	StandardFIO FileIOType = iota
+
+	// MemoryMap 内存文件映射
+	MemoryMap
+)
+
 // FileIO 标准系统文件 IO
 type FileIO struct {
 	fd *os.File

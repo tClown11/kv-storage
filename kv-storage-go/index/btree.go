@@ -22,13 +22,16 @@ func NewBTree(degree int) *BTree {
 	}
 }
 
-func (bt *BTree) Put(key []byte, pos *data.LogRecordPos) bool {
+func (bt *BTree) Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos {
 	it := &BItem{key: key, pos: pos}
 
 	bt.lock.Lock()
-	bt.tree.ReplaceOrInsert(it)
-	bt.lock.Unlock()
-	return true
+	defer bt.lock.Unlock()
+	oldItem := bt.tree.ReplaceOrInsert(it)
+	if oldItem == nil {
+		return nil
+	}
+	return oldItem.(*BItem).pos
 }
 
 func (bt *BTree) Get(key []byte) *data.LogRecordPos {
@@ -43,7 +46,7 @@ func (bt *BTree) Get(key []byte) *data.LogRecordPos {
 	return res.(*BItem).pos
 }
 
-func (bt *BTree) Delete(key []byte) bool {
+func (bt *BTree) Delete(key []byte) (*data.LogRecordPos, bool) {
 	it := &BItem{key: key}
 
 	bt.lock.Lock()
@@ -52,9 +55,9 @@ func (bt *BTree) Delete(key []byte) bool {
 	oldItem := bt.tree.Delete(it)
 	// 无效删除
 	if oldItem == nil {
-		return false
+		return nil, false
 	}
-	return true
+	return oldItem.(*BItem).pos, true
 }
 
 // BItem btree 中的单个数据对象
