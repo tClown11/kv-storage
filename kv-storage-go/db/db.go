@@ -2,6 +2,7 @@ package db
 
 import (
 	"errors"
+	"os"
 	"sync"
 
 	"github.com/gofrs/flock"
@@ -13,17 +14,59 @@ import (
 // DB bitcask 存储引擎
 type DB struct {
 	options         Options
-	mu              *sync.Mutex
-	activeFile      *data.DataFile            // 当前活跃数据文件，可以用于写入
-	olderFiles      map[uint32]*data.DataFile // 旧数据文件，只用于读
-	index           index.Indexer             // 内存索引
-	seqNo           uint64                    // 事务序列号，全局递增
-	isMerging       bool                      // 是否正在 merge
-	seqNoFileExists bool                      // 存储事务序列号的文件是否存在
-	isInitial       bool                      // 是否是第一次初始化此数据目录
-	fileLock        *flock.Flock              // 文件锁保证多进程之间的互斥
-	bytesWrite      uint                      // 累计写了多少个字节
-	reclaimSize     int64                     // 表示有多少数据是无效的
+	mu              *sync.RWMutex
+	fileIDs         []int                        // 文件 id ，只用在加载索引的时候
+	activeFile      *data.StorageFile            // 当前活跃数据文件，可以用于写入
+	olderFiles      map[uint32]*data.StorageFile // 旧数据文件，只用于读
+	index           index.Indexer                // 内存索引
+	seqNo           uint64                       // 事务序列号，全局递增
+	isMerging       bool                         // 是否正在 merge
+	seqNoFileExists bool                         // 存储事务序列号的文件是否存在
+	isInitial       bool                         // 是否是第一次初始化此数据目录
+	fileLock        *flock.Flock                 // 文件锁保证多进程之间的互斥
+	bytesWrite      uint                         // 累计写了多少个字节
+	reclaimSize     int64                        // 表示有多少数据是无效的
+}
+
+func newDB(options Options) *DB {
+	return &DB{
+		options:    options,
+		mu:         new(sync.RWMutex),
+		olderFiles: make(map[uint32]*data.StorageFile),
+		index: index.NewIndexer(&index.IndexOpts{
+			Type: options.IndexType,
+		}),
+	}
+}
+
+// Open 打开 bitcask 存储引擎实例
+func Open(options Options) (*DB, error) {
+	// 对用户传入的配置项进行校验
+	if err := checkOptions(options); err != nil {
+		return nil, err
+	}
+
+	// 判断数据目录是否存在，如果不存在，则创建这个目录
+	if _, err := os.Stat(options.DirPath); os.IsNotExist(err) {
+		if err = os.MkdirAll(options.DirPath, os.ModePerm); err != nil {
+			return nil, err
+		}
+	}
+
+	// 初始化 DB 实例结构体
+	db := newDB(options)
+
+	// 加载数据文件
+	if err := db.loadStorageFiles(); err != nil {
+		return nil, err
+	}
+
+	// 从数据文件中加载索引
+	if err := db.loadIndexFromStorageFiles(); err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }
 
 func (db *DB) Put(key []byte, value []byte) error {
@@ -119,10 +162,25 @@ func (db *DB) setActiveDataFile() error {
 	}
 
 	// 打开新的数据文件
-	dataFile, err := data.OpenDataFile(db.options.DirPath, initialFileID, fio.StandardFIO)
+	dataFile, err := data.OpenStorageFile(db.options.DirPath, initialFileID, fio.StandardFIO)
 	if err != nil {
 		return err
 	}
 	db.activeFile = dataFile
+	return nil
+}
+
+func checkOptions(options Options) error {
+	if options.DirPath == "" {
+		return errors.New("database dir path is empty")
+	}
+
+	if options.DataFileSize == 0 {
+		return errors.New("database data file size must be greater than 0")
+	}
+
+	if options.DataFileMergeRatio < 0 || options.DataFileMergeRatio > 1 {
+		return errors.New("invalid merge ratio, must between 0 and 1")
+	}
 	return nil
 }

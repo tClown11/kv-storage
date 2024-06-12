@@ -1,5 +1,7 @@
 package db
 
+import "github.com/tClown11/kv-storage/index"
+
 type Options struct {
 	// 数据库数据目录
 	DirPath string
@@ -14,7 +16,7 @@ type Options struct {
 	BytesPerSync uint
 
 	// 索引类型
-	IndexType IndexerType
+	IndexType index.IndexType
 
 	// 启动时是否使用 MMap 加载数据
 	MMapAtStartup bool
@@ -22,16 +24,3 @@ type Options struct {
 	//	数据文件合并的阈值
 	DataFileMergeRatio float32
 }
-
-type IndexerType = int8
-
-const (
-	// BTree 索引
-	BTree IndexerType = iota + 1
-
-	// ART Adpative Radix Tree 自适应基数树索引
-	ART
-
-	// BPlusTree B+ 树索引，将索引存储到磁盘上
-	BPlusTree
-)

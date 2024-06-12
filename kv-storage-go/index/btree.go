@@ -9,6 +9,8 @@ import (
 	"github.com/tClown11/kv-storage/data"
 )
 
+const defaultDegree = 32
+
 // BTree 索引，主要封装 google 的 btree 的实现
 type BTree struct {
 	tree *btree.BTree
@@ -16,6 +18,10 @@ type BTree struct {
 }
 
 func NewBTree(degree int) *BTree {
+	if degree == 0 {
+		degree = defaultDegree
+	}
+
 	return &BTree{
 		tree: btree.New(degree),
 		lock: &sync.RWMutex{},

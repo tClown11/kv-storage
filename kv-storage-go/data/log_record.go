@@ -10,6 +10,8 @@ import (
 // 4 +  1  +  5   +   5 = 15
 const maxLogRecordHeaderSize = binary.MaxVarintLen32*2 + 5
 
+const crcLength = crc32.Size
+
 // LogRecordPos 数据内存索引，主要描述数据在磁盘上的位置
 type LogRecordPos struct {
 	Fid    uint32 // 文件 id，表示将数据存储在哪个文件中
@@ -21,7 +23,7 @@ type LogRecordType byte
 
 const (
 	LogRecordNormal LogRecordType = iota
-	LogRecordDelted
+	LogRecordDeleted
 )
 
 // LogRecord 写入到数据文件的日志记录
@@ -64,4 +66,16 @@ func (logRe *LogRecord) EncodeLogRecord() ([]byte, int64) {
 	binary.LittleEndian.PutUint32(encBytes[:4], crc)
 
 	return encBytes, int64(size)
+}
+
+func (logRe *LogRecord) EncodeCRCFromBytes(buf []byte) uint32 {
+	if len(logRe.Key) == 0 && len(logRe.Value) == 0 {
+		return 0
+	}
+
+	crc := crc32.ChecksumIEEE(buf[:])
+	crc = crc32.Update(crc, crc32.IEEETable, logRe.Key)
+	crc = crc32.Update(crc, crc32.IEEETable, logRe.Value)
+
+	return crc
 }
