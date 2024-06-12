@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofrs/flock"
 	"github.com/tClown11/kv-storage/data"
+	"github.com/tClown11/kv-storage/errs"
 	"github.com/tClown11/kv-storage/fio"
 	"github.com/tClown11/kv-storage/index"
 )
@@ -94,6 +95,25 @@ func (db *DB) Put(key []byte, value []byte) error {
 	return nil
 }
 
+func (db *DB) Get(key []byte) ([]byte, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	// 判断 key 的有效性
+	if len(key) == 0 {
+		return nil, errs.ErrKeyIsEmpty
+	}
+
+	// 从内存数据结构中取出 key 对应的索引信息
+	logRecordPos := db.index.Get(key)
+
+	// 如果 key 不在内存索引中，说明 key 不存在
+	if logRecordPos == nil {
+		return nil, errs.ErrKeyNotFound
+	}
+	return db.getValueByPosition(logRecordPos)
+}
+
 func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -168,6 +188,33 @@ func (db *DB) setActiveDataFile() error {
 	}
 	db.activeFile = dataFile
 	return nil
+}
+
+// 根据索引信息获取对应的 value
+func (db *DB) getValueByPosition(logRecordPos *data.LogRecordPos) ([]byte, error) {
+	// 根据文件 id 找到对应的数据文件
+	var storageFile *data.StorageFile
+	if db.activeFile.FileID == logRecordPos.Fid {
+		storageFile = db.activeFile
+	} else {
+		storageFile = db.olderFiles[logRecordPos.Fid]
+	}
+
+	// 数据文件不存在
+	if storageFile == nil {
+		return nil, errs.ErrDataFileNotFound
+	}
+
+	// 根据便宜读取对应的数据
+	logRecord, _, err := storageFile.ReadLogRecord(logRecordPos.Offset)
+	if err != nil {
+		return nil, err
+	}
+
+	if logRecord.Type == data.LogRecordDeleted {
+		return nil, errs.ErrKeyNotFound
+	}
+	return logRecord.Value, nil
 }
 
 func checkOptions(options Options) error {
