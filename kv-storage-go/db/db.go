@@ -6,34 +6,34 @@ import (
 	"sync"
 
 	"github.com/gofrs/flock"
-	"github.com/tClown11/kv-storage/data"
 	"github.com/tClown11/kv-storage/errs"
 	"github.com/tClown11/kv-storage/fio"
 	"github.com/tClown11/kv-storage/index"
+	"github.com/tClown11/kv-storage/structure"
 )
 
 // DB bitcask 存储引擎
 type DB struct {
 	options         Options
 	mu              *sync.RWMutex
-	fileIDs         []int                        // 文件 id ，只用在加载索引的时候
-	activeFile      *data.StorageFile            // 当前活跃数据文件，可以用于写入
-	olderFiles      map[uint32]*data.StorageFile // 旧数据文件，只用于读
-	index           index.Indexer                // 内存索引
-	seqNo           uint64                       // 事务序列号，全局递增
-	isMerging       bool                         // 是否正在 merge
-	seqNoFileExists bool                         // 存储事务序列号的文件是否存在
-	isInitial       bool                         // 是否是第一次初始化此数据目录
-	fileLock        *flock.Flock                 // 文件锁保证多进程之间的互斥
-	bytesWrite      uint                         // 累计写了多少个字节
-	reclaimSize     int64                        // 表示有多少数据是无效的
+	fileIDs         []int                             // 文件 id ，只用在加载索引的时候
+	activeFile      *structure.StorageFile            // 当前活跃数据文件，可以用于写入
+	olderFiles      map[uint32]*structure.StorageFile // 旧数据文件，只用于读
+	index           index.Indexer                     // 内存索引
+	seqNo           uint64                            // 事务序列号，全局递增
+	isMerging       bool                              // 是否正在 merge
+	seqNoFileExists bool                              // 存储事务序列号的文件是否存在
+	isInitial       bool                              // 是否是第一次初始化此数据目录
+	fileLock        *flock.Flock                      // 文件锁保证多进程之间的互斥
+	bytesWrite      uint                              // 累计写了多少个字节
+	reclaimSize     int64                             // 表示有多少数据是无效的
 }
 
 func newDB(options Options) *DB {
 	return &DB{
 		options:    options,
 		mu:         new(sync.RWMutex),
-		olderFiles: make(map[uint32]*data.StorageFile),
+		olderFiles: make(map[uint32]*structure.StorageFile),
 		index: index.NewIndexer(&index.IndexOpts{
 			Type: options.IndexType,
 		}),
@@ -76,10 +76,10 @@ func (db *DB) Put(key []byte, value []byte) error {
 		return errors.New("")
 	}
 
-	log_record := &data.LogRecord{
+	log_record := &structure.LogRecord{
 		Key:   key,
 		Value: value,
-		Type:  data.LogRecordNormal,
+		Type:  structure.LogRecordNormal,
 	}
 
 	// 追加写入到当前活跃的数据文件中
@@ -108,9 +108,9 @@ func (db *DB) Delete(key []byte) error {
 	}
 
 	// 构造 LogRecord, 表示其是被删除的
-	logRecord := &data.LogRecord{
+	logRecord := &structure.LogRecord{
 		Key:  key,
-		Type: data.LogRecordDeleted,
+		Type: structure.LogRecordDeleted,
 	}
 	// 写入到数据文件中
 	_, err := db.appendLogRecord(logRecord)
@@ -149,7 +149,7 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 	return db.getValueByPosition(logRecordPos)
 }
 
-func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, error) {
+func (db *DB) appendLogRecord(logRecord *structure.LogRecord) (*structure.LogRecordPos, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -201,7 +201,7 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (*data.LogRecordPos, er
 	}
 
 	// 构建内存索引信息
-	pos := &data.LogRecordPos{
+	pos := &structure.LogRecordPos{
 		Fid:    db.activeFile.FileID,
 		Offset: writeOff,
 		Size:   uint32(size),
@@ -217,7 +217,7 @@ func (db *DB) setActiveDataFile() error {
 	}
 
 	// 打开新的数据文件
-	dataFile, err := data.OpenStorageFile(db.options.DirPath, initialFileID, fio.StandardFIO)
+	dataFile, err := structure.OpenStorageFile(db.options.DirPath, initialFileID, fio.StandardFIO)
 	if err != nil {
 		return err
 	}
@@ -226,9 +226,9 @@ func (db *DB) setActiveDataFile() error {
 }
 
 // 根据索引信息获取对应的 value
-func (db *DB) getValueByPosition(logRecordPos *data.LogRecordPos) ([]byte, error) {
+func (db *DB) getValueByPosition(logRecordPos *structure.LogRecordPos) ([]byte, error) {
 	// 根据文件 id 找到对应的数据文件
-	var storageFile *data.StorageFile
+	var storageFile *structure.StorageFile
 	if db.activeFile.FileID == logRecordPos.Fid {
 		storageFile = db.activeFile
 	} else {
@@ -246,7 +246,7 @@ func (db *DB) getValueByPosition(logRecordPos *data.LogRecordPos) ([]byte, error
 		return nil, err
 	}
 
-	if logRecord.Type == data.LogRecordDeleted {
+	if logRecord.Type == structure.LogRecordDeleted {
 		return nil, errs.ErrKeyNotFound
 	}
 	return logRecord.Value, nil

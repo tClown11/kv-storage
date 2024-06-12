@@ -1,11 +1,11 @@
 package index
 
-import "github.com/tClown11/kv-storage/data"
+import "github.com/tClown11/kv-storage/structure"
 
 type Indexer interface {
-	Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos
-	Get(key []byte) *data.LogRecordPos
-	Delete(key []byte) (*data.LogRecordPos, bool)
+	Put(key []byte, pos *structure.LogRecordPos) *structure.LogRecordPos
+	Get(key []byte) *structure.LogRecordPos
+	Delete(key []byte) (*structure.LogRecordPos, bool)
 }
 
 type IndexType = int8

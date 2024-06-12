@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/tClown11/kv-storage/data"
+	"github.com/tClown11/kv-storage/structure"
 )
 
 var testBTree = NewBTree(32)
@@ -13,25 +13,25 @@ func TestBTree_PUT(t *testing.T) {
 
 	tests := []struct {
 		testData *BItem
-		result   *data.LogRecordPos
+		result   *structure.LogRecordPos
 	}{
 		{
-			testData: &BItem{pos: &data.LogRecordPos{Fid: 1, Offset: 100}},
+			testData: &BItem{pos: &structure.LogRecordPos{Fid: 1, Offset: 100}},
 			result:   nil,
 		},
 		{
 			testData: &BItem{
 				key: []byte("a"),
-				pos: &data.LogRecordPos{Fid: 1, Offset: 2},
+				pos: &structure.LogRecordPos{Fid: 1, Offset: 2},
 			},
 			result: nil,
 		},
 		{
 			testData: &BItem{
 				key: []byte("a"),
-				pos: &data.LogRecordPos{Fid: 11, Offset: 12},
+				pos: &structure.LogRecordPos{Fid: 11, Offset: 12},
 			},
-			result: &data.LogRecordPos{Fid: 1, Offset: 2},
+			result: &structure.LogRecordPos{Fid: 1, Offset: 2},
 		},
 	}
 
@@ -50,7 +50,7 @@ func TestBTree_GET(t *testing.T) {
 
 	tests := []struct {
 		testData *BItem
-		result   *data.LogRecordPos
+		result   *structure.LogRecordPos
 	}{
 		{
 			testData: &BItem{key: []byte("1")},
@@ -60,7 +60,7 @@ func TestBTree_GET(t *testing.T) {
 			testData: &BItem{
 				key: []byte("a"),
 			},
-			result: &data.LogRecordPos{Fid: 11, Offset: 12},
+			result: &structure.LogRecordPos{Fid: 11, Offset: 12},
 		},
 	}
 
@@ -75,7 +75,7 @@ func TestBTree_GET(t *testing.T) {
 func TestBTree_DEL(t *testing.T) {
 	tests := []struct {
 		testData *BItem
-		result   *data.LogRecordPos
+		result   *structure.LogRecordPos
 		output   bool
 	}{
 		{
@@ -86,7 +86,7 @@ func TestBTree_DEL(t *testing.T) {
 			testData: &BItem{
 				key: []byte("a"),
 			},
-			result: &data.LogRecordPos{Fid: 1, Offset: 2},
+			result: &structure.LogRecordPos{Fid: 1, Offset: 2},
 			output: true,
 		},
 	}

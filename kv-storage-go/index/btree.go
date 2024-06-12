@@ -5,8 +5,7 @@ import (
 	"sync"
 
 	"github.com/google/btree"
-
-	"github.com/tClown11/kv-storage/data"
+	"github.com/tClown11/kv-storage/structure"
 )
 
 const defaultDegree = 32
@@ -28,7 +27,7 @@ func NewBTree(degree int) *BTree {
 	}
 }
 
-func (bt *BTree) Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos {
+func (bt *BTree) Put(key []byte, pos *structure.LogRecordPos) *structure.LogRecordPos {
 	it := &BItem{key: key, pos: pos}
 
 	bt.lock.Lock()
@@ -40,7 +39,7 @@ func (bt *BTree) Put(key []byte, pos *data.LogRecordPos) *data.LogRecordPos {
 	return oldItem.(*BItem).pos
 }
 
-func (bt *BTree) Get(key []byte) *data.LogRecordPos {
+func (bt *BTree) Get(key []byte) *structure.LogRecordPos {
 	it := &BItem{key: key}
 	bt.lock.RLock()
 	defer bt.lock.RUnlock()
@@ -52,7 +51,7 @@ func (bt *BTree) Get(key []byte) *data.LogRecordPos {
 	return res.(*BItem).pos
 }
 
-func (bt *BTree) Delete(key []byte) (*data.LogRecordPos, bool) {
+func (bt *BTree) Delete(key []byte) (*structure.LogRecordPos, bool) {
 	it := &BItem{key: key}
 
 	bt.lock.Lock()
@@ -69,7 +68,7 @@ func (bt *BTree) Delete(key []byte) (*data.LogRecordPos, bool) {
 // BItem btree 中的单个数据对象
 type BItem struct {
 	key []byte
-	pos *data.LogRecordPos
+	pos *structure.LogRecordPos
 }
 
 func (bi *BItem) Less(item btree.Item) bool {

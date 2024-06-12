@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tClown11/kv-storage/data"
 	"github.com/tClown11/kv-storage/errs"
 	"github.com/tClown11/kv-storage/fio"
+	"github.com/tClown11/kv-storage/structure"
 )
 
 func (db *DB) loadStorageFiles() error {
@@ -21,7 +21,7 @@ func (db *DB) loadStorageFiles() error {
 	var fileIDs []int
 	// 遍历目录中的所有文件，找到所有以 .data 结尾的文件
 	for _, item := range dirEntries {
-		if strings.HasSuffix(item.Name(), data.StorageFileNameSuffix) {
+		if strings.HasSuffix(item.Name(), structure.StorageFileNameSuffix) {
 			splitNames := strings.Split(item.Name(), ".")
 			fileID, err := strconv.Atoi(splitNames[0])
 			// 数据目录可能被损坏
@@ -43,7 +43,7 @@ func (db *DB) loadStorageFiles() error {
 			ioType = fio.MemoryMap
 		}
 
-		dataFile, err := data.OpenStorageFile(db.options.DirPath, uint32(fid), ioType)
+		dataFile, err := structure.OpenStorageFile(db.options.DirPath, uint32(fid), ioType)
 		if err != nil {
 			return err
 		}
@@ -71,7 +71,7 @@ func (db *DB) loadIndexFromStorageFiles() error {
 	// 遍历所有的文件 id， 处理文件中的记录
 	for i, fid := range db.fileIDs {
 		var fileID = uint32(fid)
-		var storageFile *data.StorageFile
+		var storageFile *structure.StorageFile
 		if fileID == db.activeFile.FileID {
 			storageFile = db.activeFile
 		} else {
@@ -91,12 +91,12 @@ func (db *DB) loadIndexFromStorageFiles() error {
 }
 
 // writeCache 将
-func (db *DB) writeCache(fileID uint32, file *data.StorageFile) (int64, error) {
+func (db *DB) writeCache(fileID uint32, file *structure.StorageFile) (int64, error) {
 	var offset int64 = 0
 
-	updateIndex := func(key []byte, typ data.LogRecordType, pos *data.LogRecordPos) {
-		var oldPos *data.LogRecordPos
-		if typ == data.LogRecordDeleted {
+	updateIndex := func(key []byte, typ structure.LogRecordType, pos *structure.LogRecordPos) {
+		var oldPos *structure.LogRecordPos
+		if typ == structure.LogRecordDeleted {
 			oldPos, _ = db.index.Delete(key)
 			db.reclaimSize += int64(pos.Size)
 		} else {
@@ -117,7 +117,7 @@ func (db *DB) writeCache(fileID uint32, file *data.StorageFile) (int64, error) {
 		}
 
 		// 构造内存索引并保存
-		logRecordPos := &data.LogRecordPos{
+		logRecordPos := &structure.LogRecordPos{
 			Fid:    fileID,
 			Offset: int64(offset),
 			Size:   uint32(size),
