@@ -1,6 +1,10 @@
 package db
 
-import "github.com/tClown11/kv-storage/index"
+import (
+	"os"
+
+	"github.com/tClown11/kv-storage/index"
+)
 
 type Options struct {
 	// 数据库数据目录
@@ -23,4 +27,14 @@ type Options struct {
 
 	//	数据文件合并的阈值
 	DataFileMergeRatio float32
+}
+
+var DefaultOptions = Options{
+	DirPath:            os.TempDir(),
+	DataFileSize:       256 * 1024 * 1024, // 256MB
+	SyncWrites:         false,
+	BytesPerSync:       0,
+	IndexType:          index.BTree,
+	MMapAtStartup:      true,
+	DataFileMergeRatio: 0.5,
 }

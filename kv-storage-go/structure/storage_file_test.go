@@ -1,15 +1,25 @@
 package structure
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/tClown11/kv-storage/fio"
 )
 
-const (
-	dirPathTest = "./"
+var (
+	dirPathTest = destroyTest()
 )
+
+func destroyTest() string {
+	var dirPathTest = "./test/"
+	err := os.Mkdir(dirPathTest, 0755)
+	if err != nil {
+		panic(err)
+	}
+	return dirPathTest
+}
 
 func TestOpenStorageFile(t *testing.T) {
 
@@ -195,4 +205,10 @@ func TestStorageFile_ReadLogRecord(t *testing.T) {
 			offset += logSize
 		}
 	}
+}
+
+// 测试完成之后销毁 DB 数据目录
+func TestDestroyDir(t *testing.T) {
+	err := os.RemoveAll(dirPathTest)
+	assert.Nil(t, err)
 }

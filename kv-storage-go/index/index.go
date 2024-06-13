@@ -12,7 +12,7 @@ type IndexType = int8
 
 const (
 	// Btree 索引
-	Btree IndexType = iota + 1
+	BTree IndexType = iota + 1
 
 	// ART 自适应基数树索引
 	ART
@@ -32,8 +32,8 @@ type IndexOpts struct {
 // NewIndexer 根据类型初始化索引
 func NewIndexer(opts *IndexOpts) Indexer {
 	switch opts.Type {
-	case Btree:
-		return NewBTree(opts.Size)
+	case BTree:
+		return NewBtree(opts.Size)
 	// case ART:
 	// 	return NewART()
 	// case BPTree:

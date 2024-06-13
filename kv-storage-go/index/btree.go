@@ -10,24 +10,24 @@ import (
 
 const defaultDegree = 32
 
-// BTree 索引，主要封装 google 的 btree 的实现
-type BTree struct {
+// Btree 索引，主要封装 google 的 btree 的实现
+type Btree struct {
 	tree *btree.BTree
 	lock *sync.RWMutex
 }
 
-func NewBTree(degree int) *BTree {
+func NewBtree(degree int) *Btree {
 	if degree == 0 {
 		degree = defaultDegree
 	}
 
-	return &BTree{
+	return &Btree{
 		tree: btree.New(degree),
 		lock: &sync.RWMutex{},
 	}
 }
 
-func (bt *BTree) Put(key []byte, pos *structure.LogRecordPos) *structure.LogRecordPos {
+func (bt *Btree) Put(key []byte, pos *structure.LogRecordPos) *structure.LogRecordPos {
 	it := &BItem{key: key, pos: pos}
 
 	bt.lock.Lock()
@@ -39,7 +39,7 @@ func (bt *BTree) Put(key []byte, pos *structure.LogRecordPos) *structure.LogReco
 	return oldItem.(*BItem).pos
 }
 
-func (bt *BTree) Get(key []byte) *structure.LogRecordPos {
+func (bt *Btree) Get(key []byte) *structure.LogRecordPos {
 	it := &BItem{key: key}
 	bt.lock.RLock()
 	defer bt.lock.RUnlock()
@@ -51,7 +51,7 @@ func (bt *BTree) Get(key []byte) *structure.LogRecordPos {
 	return res.(*BItem).pos
 }
 
-func (bt *BTree) Delete(key []byte) (*structure.LogRecordPos, bool) {
+func (bt *Btree) Delete(key []byte) (*structure.LogRecordPos, bool) {
 	it := &BItem{key: key}
 
 	bt.lock.Lock()
