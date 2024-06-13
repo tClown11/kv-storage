@@ -90,7 +90,7 @@ func (db *DB) loadIndexFromStorageFiles() error {
 	return nil
 }
 
-// writeCache 将
+// writeCache 将文件中的数据解析到结构体中，并更新 index 数据
 func (db *DB) writeCache(fileID uint32, file *structure.StorageFile) (int64, error) {
 	var offset int64 = 0
 

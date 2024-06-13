@@ -62,7 +62,7 @@ func (sf *StorageFile) ReadLogRecord(offset int64) (*LogRecord, int64, error) {
 
 	header := &logRecordHeader{}
 	headerSize := header.DecodeLogRecordHeader(headerBuf)
-	// 下面的两个条件表示读取到了文件末尾，直接返回 EOF 错误
+	// 下面的条件表示读取到了文件末尾，直接返回 EOF 错误
 	if header.crc == 0 && header.keySize == 0 && header.valueSize == 0 {
 		return nil, 0, io.EOF
 	}

@@ -1,5 +1,5 @@
-// Package data 是管理存储数据的包
-package data
+// Package structure 是管理存储数据的包
+package structure
 
 import (
 	"encoding/binary"
@@ -68,6 +68,7 @@ func (logRe *LogRecord) EncodeLogRecord() ([]byte, int64) {
 	return encBytes, int64(size)
 }
 
+// EncodeCRCFromBytes 根据 buf 中的 key/value 信息，更新 crc 的值，并返回
 func (logRe *LogRecord) EncodeCRCFromBytes(buf []byte) uint32 {
 	if len(logRe.Key) == 0 && len(logRe.Value) == 0 {
 		return 0
