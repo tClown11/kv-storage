@@ -46,3 +46,8 @@ var DefaultOptions = Options{
 	MMapAtStartup:      true,
 	DataFileMergeRatio: 0.5,
 }
+
+var DefaultIteratorOptions = IteratorOptions{
+	Prefix:  nil,
+	Reverse: false,
+}
