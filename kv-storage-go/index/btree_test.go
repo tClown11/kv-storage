@@ -98,3 +98,54 @@ func TestBtree_DEL(t *testing.T) {
 		}
 	}
 }
+
+func TestBtree_Iterator(t *testing.T) {
+	tests := []struct {
+		testTree *Btree
+		testData []*BItem
+		reverse  bool
+	}{
+		{
+			// Btree 为空
+			testTree: NewBtree(32),
+		},
+		{
+			// Btree 有数据的情况
+			testTree: NewBtree(32),
+			testData: []*BItem{
+				{[]byte("ccde"), &structure.LogRecordPos{Fid: 1, Offset: 10}},
+			},
+		},
+		{
+			// 有多条数据
+			testTree: NewBtree(32),
+			testData: []*BItem{
+				{[]byte("ccde"), &structure.LogRecordPos{Fid: 1, Offset: 10}},
+				{[]byte("acee"), &structure.LogRecordPos{Fid: 1, Offset: 20}},
+				{[]byte("eede"), &structure.LogRecordPos{Fid: 1, Offset: 30}},
+				{[]byte("bbcd"), &structure.LogRecordPos{Fid: 1, Offset: 40}},
+			},
+			reverse: true,
+		},
+	}
+
+	for i := range tests {
+		for j := range tests[i].testData {
+			tests[i].testTree.Put(tests[i].testData[j].key, tests[i].testData[j].pos)
+		}
+		iter := tests[i].testTree.Iterator(tests[i].reverse)
+		for iter.Valid() {
+			assert.NotNil(t, iter.Key())
+			assert.NotNil(t, iter.Value())
+			iter.Next()
+		}
+		assert.Equal(t, false, iter.Valid())
+		for iter.Rewind(); iter.Valid(); iter.Next() {
+			assert.NotNil(t, iter.Key())
+		}
+
+		for iter.Seek([]byte("cc")); iter.Valid(); iter.Next() {
+			assert.NotNil(t, iter.Key())
+		}
+	}
+}

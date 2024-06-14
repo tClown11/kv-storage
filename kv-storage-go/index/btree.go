@@ -65,6 +65,24 @@ func (bt *Btree) Delete(key []byte) (*structure.LogRecordPos, bool) {
 	return oldItem.(*BItem).pos, true
 }
 
+func (bt *Btree) Iterator(reverse bool) Iterator {
+	if bt.tree == nil {
+		return nil
+	}
+
+	bt.lock.RLock()
+	defer bt.lock.RUnlock()
+	return newBTreeIterator(bt.tree, reverse)
+}
+
+func (bt *Btree) Close() error {
+	return nil
+}
+
+func (bt *Btree) Size() int {
+	return bt.tree.Len()
+}
+
 // BItem btree 中的单个数据对象
 type BItem struct {
 	key []byte
