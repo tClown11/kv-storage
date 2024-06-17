@@ -24,6 +24,7 @@ type LogRecordType byte
 const (
 	LogRecordNormal LogRecordType = iota
 	LogRecordDeleted
+	LogRecordTxnFinished
 )
 
 // LogRecord 写入到数据文件的日志记录
@@ -79,4 +80,27 @@ func (logRe *LogRecord) EncodeCRCFromBytes(buf []byte) uint32 {
 	crc = crc32.Update(crc, crc32.IEEETable, logRe.Value)
 
 	return crc
+}
+
+// EncodeKeyWithSeq 根据事务 ID 和 key，编码新的 key
+func (logRe *LogRecord) EncodeKeyWithSeq(key []byte, seqID uint64) []byte {
+	seq := make([]byte, binary.MaxVarintLen64)
+	n := binary.PutUvarint(seq[:], seqID)
+
+	encKey := make([]byte, n+len(key))
+	copy(encKey[:n], seq[:n])
+	copy(encKey[n+1:], key)
+
+	return encKey
+}
+
+// ParseKeyAndSeqFromLogRecordKey 解析 LogRecord 的 key，获取实际的 key 和事务序列号
+func (logRe *LogRecord) ParseKeyAndSeqFromLogRecordKey() ([]byte, uint64) {
+	if len(logRe.Key) == 0 {
+		return nil, 0
+	}
+
+	seqNo, n := binary.Uvarint(logRe.Key)
+	readKey := logRe.Key[n:]
+	return readKey, seqNo
 }

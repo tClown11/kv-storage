@@ -37,6 +37,15 @@ type IteratorOptions struct {
 	Reverse bool
 }
 
+// WriteBatchOptions 批量写配置项
+type WriteBatchOptions struct {
+	// 一个批次当中最大的数据量
+	MaxBatchNum uint
+
+	// 提交时是否 sync 持久化
+	SyncWrites bool
+}
+
 var DefaultOptions = Options{
 	DirPath:            os.TempDir(),
 	DataFileSize:       256 * 1024 * 1024, // 256MB
@@ -50,4 +59,9 @@ var DefaultOptions = Options{
 var DefaultIteratorOptions = IteratorOptions{
 	Prefix:  nil,
 	Reverse: false,
+}
+
+var DefaultWriteBatchOptions = WriteBatchOptions{
+	MaxBatchNum: 10000,
+	SyncWrites:  true,
 }
