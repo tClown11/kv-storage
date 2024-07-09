@@ -34,6 +34,12 @@ type LogRecord struct {
 	Type  LogRecordType
 }
 
+// TransactionRecord 暂存的事务相关的数据
+type TransactionRecord struct {
+	Record *LogRecord
+	Pos    *LogRecordPos
+}
+
 // EncodeLogRecord 对 LogRecord 进行编码，返回字节数组及长度
 //
 //	+-------------+-------------+-------------+--------------+-------------+--------------+
@@ -83,7 +89,7 @@ func (logRe *LogRecord) EncodeCRCFromBytes(buf []byte) uint32 {
 }
 
 // EncodeKeyWithSeq 根据事务 ID 和 key，编码新的 key
-func (logRe *LogRecord) EncodeKeyWithSeq(key []byte, seqID uint64) []byte {
+func EncodeKeyWithSeq(key []byte, seqID uint64) []byte {
 	seq := make([]byte, binary.MaxVarintLen64)
 	n := binary.PutUvarint(seq[:], seqID)
 
@@ -95,12 +101,12 @@ func (logRe *LogRecord) EncodeKeyWithSeq(key []byte, seqID uint64) []byte {
 }
 
 // ParseKeyAndSeqFromLogRecordKey 解析 LogRecord 的 key，获取实际的 key 和事务序列号
-func (logRe *LogRecord) ParseKeyAndSeqFromLogRecordKey() ([]byte, uint64) {
-	if len(logRe.Key) == 0 {
+func ParseKeyAndSeqFromLogRecordKey(key []byte) ([]byte, uint64) {
+	if len(key) == 0 {
 		return nil, 0
 	}
 
-	seqNo, n := binary.Uvarint(logRe.Key)
-	readKey := logRe.Key[n:]
+	seqNo, n := binary.Uvarint(key)
+	readKey := key[n:]
 	return readKey, seqNo
 }

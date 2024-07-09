@@ -8,6 +8,7 @@ import (
 	"github.com/tClown11/kv-storage/structure"
 )
 
+// 非事务标记
 const nonTransactionSeqNo uint64 = 0
 
 var txnFinKey = []byte("txn-fin")
@@ -87,7 +88,7 @@ func (wb *Writebatch) Commit() error {
 	positions := make(map[string]*structure.LogRecordPos)
 	for _, record := range wb.pendingWrites {
 		logRecords, err := wb.db.appendLogRecord(&structure.LogRecord{
-			Key:   record.Key,
+			Key:   structure.EncodeKeyWithSeq(record.Key, seqNo),
 			Value: record.Value,
 			Type:  record.Type,
 		})
@@ -99,9 +100,9 @@ func (wb *Writebatch) Commit() error {
 
 	// 写一条表示事务完成的数据
 	finishedRecord := &structure.LogRecord{
+		Key:  structure.EncodeKeyWithSeq(txnFinKey, seqNo),
 		Type: structure.LogRecordTxnFinished,
 	}
-	finishedRecord.Key = finishedRecord.EncodeKeyWithSeq(txnFinKey, seqNo)
 	if _, err := wb.db.appendLogRecord(finishedRecord); err != nil {
 		return err
 	}

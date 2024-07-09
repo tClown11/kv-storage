@@ -77,13 +77,13 @@ func (db *DB) Put(key []byte, value []byte) error {
 	}
 
 	log_record := &structure.LogRecord{
-		Key:   key,
+		Key:   structure.EncodeKeyWithSeq(key, nonTransactionSeqNo),
 		Value: value,
 		Type:  structure.LogRecordNormal,
 	}
 
 	// 追加写入到当前活跃的数据文件中
-	pos, err := db.appendLogRecord(log_record)
+	pos, err := db.appendLogRecordLock(log_record)
 	if err != nil {
 		return err
 	}
@@ -109,11 +109,11 @@ func (db *DB) Delete(key []byte) error {
 
 	// 构造 LogRecord, 表示其是被删除的
 	logRecord := &structure.LogRecord{
-		Key:  key,
+		Key:  structure.EncodeKeyWithSeq(key, nonTransactionSeqNo),
 		Type: structure.LogRecordDeleted,
 	}
 	// 写入到数据文件中
-	_, err := db.appendLogRecord(logRecord)
+	_, err := db.appendLogRecordLock(logRecord)
 	if err != nil {
 		return err
 	}
@@ -232,10 +232,14 @@ func (db *DB) Fold(fn func(key []byte, value []byte) bool) error {
 	return nil
 }
 
-func (db *DB) appendLogRecord(logRecord *structure.LogRecord) (*structure.LogRecordPos, error) {
+func (db *DB) appendLogRecordLock(logRecord *structure.LogRecord) (*structure.LogRecordPos, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+	return db.appendLogRecord(logRecord)
+}
 
+// appendLogRecord 追加写数据到活跃文件中
+func (db *DB) appendLogRecord(logRecord *structure.LogRecord) (*structure.LogRecordPos, error) {
 	// 判断当前是否存在活跃的数据文件
 	if db.activeFile == nil {
 		if err := db.setActiveDataFile(); err != nil {

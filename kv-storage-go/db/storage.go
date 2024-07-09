@@ -93,6 +93,8 @@ func (db *DB) loadIndexFromStorageFiles() error {
 // writeCache 将文件中的数据解析到结构体中，并更新 index 数据
 func (db *DB) writeCache(fileID uint32, file *structure.StorageFile) (int64, error) {
 	var offset int64 = 0
+	var currentSeqID = nonTransactionSeqNo
+	transationRecords := make(map[uint64][]*structure.TransactionRecord)
 
 	updateIndex := func(key []byte, typ structure.LogRecordType, pos *structure.LogRecordPos) {
 		var oldPos *structure.LogRecordPos
@@ -123,11 +125,41 @@ func (db *DB) writeCache(fileID uint32, file *structure.StorageFile) (int64, err
 			Size:   uint32(size),
 		}
 
-		// 更新索引
-		updateIndex(logRecord.Key, logRecord.Type, logRecordPos)
+		// 解析 key，拿到事务序列号
+		realKey, seqID := structure.ParseKeyAndSeqFromLogRecordKey(logRecord.Key)
+		if seqID == nonTransactionSeqNo {
+			// 非事务操作, 直接更新内存索引
+			updateIndex(logRecord.Key, logRecord.Type, logRecordPos)
+		} else {
+			// 存在事务 ID
+			logRecord.Key = realKey
+
+			// 事务完成，对应的 seq no 的数据可以更新到内存索引中
+			if logRecord.Type == structure.LogRecordTxnFinished {
+				for _, txnRecord := range transationRecords[seqID] {
+					updateIndex(txnRecord.Record.Key, txnRecord.Record.Type, txnRecord.Pos)
+				}
+				delete(transationRecords, seqID)
+			} else {
+				logRecord.Key = realKey
+				transationRecords[seqID] = append(transationRecords[seqID], &structure.TransactionRecord{
+					Record: logRecord,
+					Pos:    logRecordPos,
+				})
+			}
+		}
+
+		// 更新事务序列号
+		if seqID > currentSeqID {
+			currentSeqID = seqID
+		}
 
 		// 递增 offset，下一次从新的位置开始读取
 		offset += size
 	}
+
+	// 更新事务序列号
+	db.seqNo = currentSeqID
+
 	return offset, nil
 }
