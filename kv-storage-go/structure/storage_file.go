@@ -12,7 +12,7 @@ import (
 const (
 	StorageFileNameSuffix = ".data"
 	HintFileName          = "hint-index"
-	MergeFinishesfileName = "merge-finished"
+	MergeFinishedfileName = "merge-finished"
 	SeqNoFileName         = "seq-no"
 )
 
@@ -20,6 +20,38 @@ type StorageFile struct {
 	FileID    uint32        // 文件编号(id)
 	WriteOff  int64         // 文件写入偏移量( 当前文件写入到了哪个位置 )
 	IoManager fio.IOManager // io 读写管理
+}
+
+// OpenHintFile 打开 Hint 索引文件
+func OpenHintFile(dirPath string) (*StorageFile, error) {
+	fileName := filepath.Join(dirPath, HintFileName)
+	return newStorageFile(fileName, 0, fio.StandardFIO)
+}
+
+// OpenMergeFinishedFile 打开标识 merge 完成的文件
+func OpenMergeFinishedFile(dirPath string) (*StorageFile, error) {
+	fileName := filepath.Join(dirPath, MergeFinishedfileName)
+	return newStorageFile(fileName, 0, fio.StandardFIO)
+}
+
+// OpenSeqNoFile 存储事务序列号的文件
+func OpenSeqNoFile(dirPath string) (*StorageFile, error) {
+	fileName := filepath.Join(dirPath, SeqNoFileName)
+	return newStorageFile(fileName, 0, fio.StandardFIO)
+}
+
+func GetDataFileName(dirPath string, fileId uint32) string {
+	return filepath.Join(dirPath, fmt.Sprintf("%09d", fileId)+StorageFileNameSuffix)
+}
+
+// WriteHintRecord 写入索引信息到 hint 文件中
+func (sf *StorageFile) WriteHintRecord(key []byte, pos *LogRecordPos) error {
+	record := &LogRecord{
+		Key:   key,
+		Value: EncodeLogRecordPos(pos),
+	}
+	encRecord, _ := record.EncodeLogRecord()
+	return sf.Write(encRecord)
 }
 
 func (sf *StorageFile) Write(buf []byte) error {

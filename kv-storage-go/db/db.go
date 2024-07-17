@@ -2,7 +2,10 @@ package db
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
+	"strconv"
 	"sync"
 
 	"github.com/gofrs/flock"
@@ -10,6 +13,12 @@ import (
 	"github.com/tClown11/kv-storage/fio"
 	"github.com/tClown11/kv-storage/index"
 	"github.com/tClown11/kv-storage/structure"
+	"github.com/tClown11/kv-storage/utils"
+)
+
+const (
+	seqNoKey     = "seq.no"
+	fileLockName = "flock"
 )
 
 // DB bitcask 存储引擎
@@ -29,13 +38,23 @@ type DB struct {
 	reclaimSize     int64                             // 表示有多少数据是无效的
 }
 
+// Stat 存储引擎统计信息
+type Stat struct {
+	KeyNum          uint  // key 的总数量
+	DataFileNum     uint  // 数据文件的数量
+	ReclaimableSize int64 // 可以进行 merge 回收的数据量，字节为单位
+	DiskSize        int64 // 数据目录所占磁盘空间大小
+}
+
 func newDB(options Options) *DB {
 	return &DB{
 		options:    options,
 		mu:         new(sync.RWMutex),
 		olderFiles: make(map[uint32]*structure.StorageFile),
 		index: index.NewIndexer(&index.IndexOpts{
-			Type: options.IndexType,
+			Type:    options.IndexType,
+			DirPath: options.DirPath,
+			Sync:    options.SyncWrites,
 		}),
 	}
 }
@@ -47,18 +66,52 @@ func Open(options Options) (*DB, error) {
 		return nil, err
 	}
 
-	// 判断数据目录是否存在，如果不存在，则创建这个目录
+	var isInitial bool
+	// 判断数据目录是否存在，如果不存在的话，则创建这个目录
 	if _, err := os.Stat(options.DirPath); os.IsNotExist(err) {
-		if err = os.MkdirAll(options.DirPath, os.ModePerm); err != nil {
+		isInitial = true
+		if err := os.MkdirAll(options.DirPath, os.ModePerm); err != nil {
 			return nil, err
 		}
 	}
 
+	// 判断当前数据目录是否正在使用
+	fileLock := flock.New(filepath.Join(options.DirPath, fileLockName))
+	hold, err := fileLock.TryLock()
+	if err != nil {
+		return nil, err
+	}
+	if !hold {
+		return nil, errs.ErrDatabaseIsUsing
+	}
+
+	entries, err := os.ReadDir(options.DirPath)
+	if err != nil {
+		return nil, err
+	}
+	if len(entries) == 0 {
+		isInitial = true
+	}
+
 	// 初始化 DB 实例结构体
 	db := newDB(options)
+	db.isInitial = isInitial
+	db.fileLock = fileLock
+
+	// 加载 merge 数据目录
+	if err := db.loadMergeFiles(); err != nil {
+		return nil, err
+	}
 
 	// 加载数据文件
 	if err := db.loadStorageFiles(); err != nil {
+		return nil, err
+	}
+
+	// 索引加载
+
+	// 从 hint 索引文件中加载索引
+	if err := db.loadIndexFromHintFile(); err != nil {
 		return nil, err
 	}
 
@@ -67,13 +120,32 @@ func Open(options Options) (*DB, error) {
 		return nil, err
 	}
 
+	// 获取事务已操作的序列号
+	if err := db.loadSeqNo(); err != nil {
+		return nil, err
+	}
+	if db.activeFile != nil {
+		size, err := db.activeFile.IoManager.Size()
+		if err != nil {
+			return nil, err
+		}
+		db.activeFile.WriteOff = size
+	}
+
+	// // 重置 IO 类型为标准文件 IO
+	// if db.options.MMapAtStartup {
+	// 	if err := db.resetIoType(); err != nil {
+	// 		return nil, err
+	// 	}
+	// }
+
 	return db, nil
 }
 
 func (db *DB) Put(key []byte, value []byte) error {
 	// 判断 key 是否有效
 	if len(key) == 0 {
-		return errors.New("")
+		return errs.ErrKeyIsEmpty
 	}
 
 	log_record := &structure.LogRecord{
@@ -149,13 +221,42 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 	return db.getValueByPosition(logRecordPos)
 }
 
+// Stat 返回数据库的相关统计信息
+func (db *DB) Stat() *Stat {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var dataFiles = uint(len(db.olderFiles))
+	if db.activeFile != nil {
+		dataFiles += 1
+	}
+
+	dirSize, err := utils.DirSize(db.options.DirPath)
+	if err != nil {
+		panic(fmt.Sprintf("failed to get dir size : %v", err))
+	}
+	return &Stat{
+		KeyNum:          uint(db.index.Size()),
+		DataFileNum:     dataFiles,
+		ReclaimableSize: db.reclaimSize,
+		DiskSize:        dirSize,
+	}
+}
+
+// Backup 备份数据库，将数据文件拷贝到新的目录中
+func (db *DB) Backup(dir string) error {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	return utils.CopyDir(db.options.DirPath, dir, []string{fileLockName})
+}
+
 // Close 关闭数据库
 func (db *DB) Close() error {
 	defer func() {
 		// 释放文件锁
-		// if err := db.fileLock.Unlock(); err != nil {
-		// 	panic(fmt.Sprintf("failed to unlock the directory, %v", err))
-		// }
+		if err := db.fileLock.Unlock(); err != nil {
+			panic(fmt.Sprintf("failed to unlock the directory, %v", err))
+		}
 
 		// 关闭索引
 		if err := db.index.Close(); err != nil {
@@ -169,11 +270,23 @@ func (db *DB) Close() error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	// todo: 事务处理
+	// 事务处理
 
-	// record := &structure.LogRecord{
-	// 	Key: []byte(),
-	// }
+	seqNoFile, err := structure.OpenSeqNoFile(db.options.DirPath)
+	if err != nil {
+		return err
+	}
+	record := &structure.LogRecord{
+		Key:   []byte(seqNoKey),
+		Value: []byte(strconv.FormatUint(db.seqNo, 10)),
+	}
+	encRecord, _ := record.EncodeLogRecord()
+	if err := seqNoFile.Write(encRecord); err != nil {
+		return err
+	}
+	if err := seqNoFile.Sync(); err != nil {
+		return err
+	}
 
 	//	关闭当前活跃文件
 	if err := db.activeFile.Close(); err != nil {
@@ -352,4 +465,26 @@ func checkOptions(options Options) error {
 		return errors.New("invalid merge ratio, must between 0 and 1")
 	}
 	return nil
+}
+
+func (db *DB) loadSeqNo() error {
+	fileName := filepath.Join(db.options.DirPath, structure.SeqNoFileName)
+	if _, err := os.Stat(fileName); os.IsNotExist(err) {
+		return nil
+	}
+
+	seqNoFile, err := structure.OpenSeqNoFile(db.options.DirPath)
+	if err != nil {
+		return err
+	}
+
+	record, _, err := seqNoFile.ReadLogRecord(0)
+	seqNo, err := strconv.ParseUint(string(record.Value), 10, 64)
+	if err != nil {
+		return err
+	}
+
+	db.seqNo = seqNo
+	db.seqNoFileExists = true
+	return os.Remove(fileName)
 }

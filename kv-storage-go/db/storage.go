@@ -3,6 +3,7 @@ package db
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -65,12 +66,25 @@ func (db *DB) loadIndexFromStorageFiles() error {
 		return nil
 	}
 
-	// todo: 查看是否发生过 merge
-	//hasMerge, noMergeFileID := false, uint32(0)
+	// 查看是否发生过 merge
+	hasMerge, nonMergeFileID := false, uint32(0)
+	mergeFinFileName := filepath.Join(db.options.DirPath, structure.MergeFinishedfileName)
+	if _, err := os.Stat(mergeFinFileName); err == nil {
+		fid, err := db.getNonMergeFileID(db.options.DirPath)
+		if err != nil {
+			return err
+		}
+		hasMerge = true
+		nonMergeFileID = fid
+	}
 
 	// 遍历所有的文件 id， 处理文件中的记录
 	for i, fid := range db.fileIDs {
 		var fileID = uint32(fid)
+		// 如果比最近未参与 merge 的文件 id 更小，则说明已经从 Hint 文件中加载索引了
+		if hasMerge && fileID < nonMergeFileID {
+			continue
+		}
 		var storageFile *structure.StorageFile
 		if fileID == db.activeFile.FileID {
 			storageFile = db.activeFile
@@ -129,11 +143,8 @@ func (db *DB) writeCache(fileID uint32, file *structure.StorageFile) (int64, err
 		realKey, seqID := structure.ParseKeyAndSeqFromLogRecordKey(logRecord.Key)
 		if seqID == nonTransactionSeqNo {
 			// 非事务操作, 直接更新内存索引
-			updateIndex(logRecord.Key, logRecord.Type, logRecordPos)
+			updateIndex(realKey, logRecord.Type, logRecordPos)
 		} else {
-			// 存在事务 ID
-			logRecord.Key = realKey
-
 			// 事务完成，对应的 seq no 的数据可以更新到内存索引中
 			if logRecord.Type == structure.LogRecordTxnFinished {
 				for _, txnRecord := range transationRecords[seqID] {

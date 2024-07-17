@@ -95,7 +95,7 @@ func EncodeKeyWithSeq(key []byte, seqID uint64) []byte {
 
 	encKey := make([]byte, n+len(key))
 	copy(encKey[:n], seq[:n])
-	copy(encKey[n+1:], key)
+	copy(encKey[n:], key)
 
 	return encKey
 }
@@ -109,4 +109,25 @@ func ParseKeyAndSeqFromLogRecordKey(key []byte) ([]byte, uint64) {
 	seqNo, n := binary.Uvarint(key)
 	readKey := key[n:]
 	return readKey, seqNo
+}
+
+// EncodeLogRecordPos 对位置信息进行编码
+func EncodeLogRecordPos(pos *LogRecordPos) []byte {
+	buf := make([]byte, binary.MaxVarintLen32*2+binary.MaxVarintLen64)
+	var index = 0
+	index += binary.PutVarint(buf[index:], int64(pos.Fid))
+	index += binary.PutVarint(buf[index:], pos.Offset)
+	index += binary.PutVarint(buf[index:], int64(pos.Size))
+	return buf[:index]
+}
+
+// DecodeLogRecordPos 解码 LogRecordPos
+func DecodeLogRecordPos(buf []byte) *LogRecordPos {
+	var index = 0
+	fileId, n := binary.Varint(buf[index:]) //buf是有三个元素的数组
+	index += n
+	offset, n := binary.Varint(buf[index:])
+	index += n
+	size, _ := binary.Varint(buf[index:])
+	return &LogRecordPos{Fid: uint32(fileId), Offset: offset, Size: uint32(size)}
 }
